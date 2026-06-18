@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # 🤖 AI Resume Screening System
 
 ## 📌 Project Overview
@@ -233,3 +234,7 @@ AI_Resume_Screening_System/
 - Integration with recruitment platforms
 
 ---
+=======
+# FUTURE_ML_03
+AI Resume Screening System is a Machine Learning and NLP-based application that automates resume analysis and candidate ranking. It uses TF-IDF Vectorization and Cosine Similarity to match resumes with job descriptions. Built with Python and Streamlit, it provides an interactive web interface for efficient AI-powered recruitment screening.
+>>>>>>> befd03c6a0f224a8c44b78157c1560157949156f
