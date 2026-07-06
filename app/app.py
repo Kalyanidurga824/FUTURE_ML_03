@@ -1,18 +1,16 @@
 import streamlit as st
-import pandas as pd
 import joblib
-from sklearn.metrics.pairwise import cosine_similarity
 import os
-
+import fitz  # PyMuPDF
+import pandas as pd
+from sklearn.metrics.pairwise import cosine_similarity
 
 # -------------------------------
 # File Paths
 # -------------------------------
 
 BASE_DIR = os.path.dirname(
-    os.path.dirname(
-        os.path.abspath(__file__)
-    )
+    os.path.dirname(os.path.abspath(__file__))
 )
 
 MODEL_PATH = os.path.join(
@@ -21,128 +19,153 @@ MODEL_PATH = os.path.join(
     "tfidf_vectorizer.pkl"
 )
 
-DATA_PATH = os.path.join(
-    BASE_DIR,
-    "data",
-    "ranked_candidates.csv"
-)
-
-
 # -------------------------------
-# Load Model and Data
+# Load TF-IDF Vectorizer
 # -------------------------------
 
 tfidf = joblib.load(MODEL_PATH)
 
-df = pd.read_csv(DATA_PATH)
+# -------------------------------
+# Function to Extract PDF Text
+# -------------------------------
+
+def extract_text_from_pdf(pdf_file):
+    text = ""
+
+    pdf = fitz.open(stream=pdf_file.read(), filetype="pdf")
+
+    for page in pdf:
+        text += page.get_text()
+
+    return text
 
 
 # -------------------------------
-# App Title
+# Streamlit App
 # -------------------------------
 
 st.title("🤖 AI Resume Screening System")
 
 st.write(
-    "NLP based resume screening and candidate ranking system"
+    "Upload candidate resumes and compare them with the Job Description."
 )
 
-
 # -------------------------------
-# Job Description Input
+# Job Description
 # -------------------------------
 
 job_description = st.text_area(
     "Enter Job Description"
 )
 
+# -------------------------------
+# Resume Upload
+# -------------------------------
+
+uploaded_files = st.file_uploader(
+    "Upload Candidate Resumes (PDF)",
+    type=["pdf"],
+    accept_multiple_files=True
+)
 
 # -------------------------------
-# Rank Candidates
+# Rank Button
 # -------------------------------
 
 if st.button("Rank Candidates"):
 
     if job_description.strip() == "":
+        st.warning("Please enter a Job Description.")
 
-        st.warning(
-            "Please enter a job description"
-        )
+    elif not uploaded_files:
+        st.warning("Please upload at least one resume.")
 
     else:
 
-        # Convert job description into vector
+        resumes = []
 
-        job_vector = tfidf.transform(
-            [job_description]
-        )
+        for file in uploaded_files:
 
+            resume_text = extract_text_from_pdf(file)
 
-        # Convert resumes into vectors
+            resumes.append({
+                "Candidate": file.name,
+                "Resume": resume_text
+            })
 
-        resume_vectors = tfidf.transform(
-            df["clean_resume"]
-        )
+        df = pd.DataFrame(resumes)
 
+        # -------------------------------
+        # Convert text to TF-IDF vectors
+        # -------------------------------
 
-        # Calculate similarity
+        job_vector = tfidf.transform([job_description])
 
-        scores = cosine_similarity(
+        resume_vectors = tfidf.transform(df["Resume"])
+
+        # -------------------------------
+        # Calculate Cosine Similarity
+        # -------------------------------
+
+        similarity = cosine_similarity(
             resume_vectors,
             job_vector
         )
 
+        df["Match Score"] = similarity.flatten()
 
-        df["match_score"] = scores.flatten()
+        # -------------------------------
+        # Sort Candidates by Match Score
+        # -------------------------------
 
-
-        # Sort candidates
-
-        result = df.sort_values(
-            by="match_score",
+        df = df.sort_values(
+            by="Match Score",
             ascending=False
-        )
+        ).reset_index(drop=True)
 
+        # -------------------------------
+        # Add Rank Column
+        # -------------------------------
 
-        st.subheader(
-            "🏆 Top Candidates"
-        )
+        df.insert(0, "Rank", range(1, len(df) + 1))
 
+        # -------------------------------
+        # Convert Score to Percentage
+        # -------------------------------
 
-        # Display result
+        df["Match Score"] = (df["Match Score"] * 100).round(2)
 
-        display_columns = [
-            "ID",
-            "Category",
-            "match_score",
-            "skills",
-            "missing_skills"
-        ]
+        # -------------------------------
+        # Display Results
+        # -------------------------------
 
+        st.success("✅ Ranking Completed!")
 
-        available_columns = [
-            col for col in display_columns
-            if col in result.columns
-        ]
-
+        st.subheader("🏆 Candidate Rankings")
 
         st.dataframe(
-            result[available_columns].head(10),
-            use_container_width=True
+            df[["Rank", "Candidate", "Match Score"]],
+            use_container_width=True,
+            hide_index=True
         )
 
+        # -------------------------------
+        # Best Candidate
+        # -------------------------------
 
-        # Chart
+        st.subheader("🥇 Best Matching Candidate")
 
-        st.subheader(
-            "📊 Candidate Ranking Score"
+        st.success(
+            f"**{df.iloc[0]['Candidate']}** "
+            f"matched **{df.iloc[0]['Match Score']}%** with the Job Description."
         )
 
+        # -------------------------------
+        # Bar Chart
+        # -------------------------------
 
-        chart = result.head(10)
+        st.subheader("📊 Match Score Comparison")
 
+        chart_df = df.set_index("Candidate")[["Match Score"]]
 
-        st.bar_chart(
-            chart.set_index("Category")
-            ["match_score"]
-        )
+        st.bar_chart(chart_df)

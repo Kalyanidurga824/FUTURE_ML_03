@@ -150,7 +150,7 @@ http://localhost:8501
 
 ```
 Network URL:
-http://<your-network-ip>:8501
+http://10.231.156.116:8501
 ```
 
 ---
